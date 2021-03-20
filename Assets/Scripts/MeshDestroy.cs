@@ -12,28 +12,102 @@ public class MeshDestroy : MonoBehaviour
 
     public int CutCascades = 1;
     public float ExplodeForce = 0;
+    static AudioSource ac;
+    private bool isDone;
+    private bool started = true;
+    private Bounds bounds;
+    Ball ball;
 
     // Start is called before the first frame update
     void Start()
     {
-
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        if (Input.GetMouseButtonDown(0))
-        {
-            //DestroyMesh(CutCascades, ExplodeForce, new Vector3(.1f,.1f,.1f));
-        }
+        isDone = false;
+        ac = GameObject.Find("Audio Source").GetComponent<AudioSource>();
+        ball = GameObject.Find("Sphere").GetComponent<Ball>();
     }
 
     public void IncomingCollision(int cascades, float force, Vector3 forceDirection, Vector3 startPos)
-	{
+    {
         DestroyMesh(cascades, force, forceDirection, startPos);
-	}
+        ac.volume += 0.07f * cascades;
+        if (!ac.isPlaying) ac.Play();
+        for (int i = 0; i<cascades; i++)
+		{
+            ball.StartRoutine();
+		}
+    }
 
     private void DestroyMesh(int cascades, float force, Vector3 forceDirection, Vector3 startPos)
+    {
+        CutCascades = cascades;
+        ExplodeForce = force;
+
+        var originalMesh = GetComponent<MeshFilter>().mesh;
+        originalMesh.RecalculateBounds();
+        var parts = new List<PartMesh>();
+        var subParts = new List<PartMesh>();
+
+        var mainPart = new PartMesh()
+        {
+            UV = originalMesh.uv,
+            Vertices = originalMesh.vertices,
+            Normals = originalMesh.normals,
+            Triangles = new int[originalMesh.subMeshCount][],
+            Bounds = originalMesh.bounds
+        };
+        for (int i = 0; i < originalMesh.subMeshCount; i++)
+            mainPart.Triangles[i] = originalMesh.GetTriangles(i);
+
+        parts.Add(mainPart);
+
+        for (var c = 0; c < CutCascades; c++)
+        {
+            for (var i = 0; i < parts.Count; i++)
+            {
+                if (!isDone)
+				{
+                    bounds = parts[i].Bounds;
+                    bounds.Expand(0.5f);
+
+                    isDone = true;
+				}
+
+                var pos = transform.position;
+                var min = new Vector3(Mathf.Abs(bounds.min.x), Mathf.Abs(bounds.min.y), Mathf.Abs(bounds.min.z));
+                min.Scale(transform.localScale);
+                min = pos - (min);
+                var max = new Vector3(Mathf.Abs(bounds.max.x), Mathf.Abs(bounds.max.y), Mathf.Abs(bounds.max.z));
+                max.Scale(transform.localScale);
+                max = pos + (max);
+                var sizeVector = max - min;
+                var test = new Vector3((startPos.x - min.x) / sizeVector.x,
+                    (startPos.y - min.y) / sizeVector.y,
+                    (startPos.z - min.z) / sizeVector.z);
+                test.Scale(bounds.max - bounds.min);
+                var answer = bounds.min + test;
+
+                var plane = new Plane(new Vector3(UnityEngine.Random.Range(0.2f, 0.8f),
+                                                    UnityEngine.Random.Range(0.2f, 0.8f),
+                                                    UnityEngine.Random.Range(0.2f, 0.8f)).normalized,
+                                                     answer);
+
+                subParts.Add(GenerateMesh(parts[i], plane, true));
+                subParts.Add(GenerateMesh(parts[i], plane, false));
+            }
+            parts = new List<PartMesh>(subParts);
+            subParts.Clear();
+        }
+        isDone = true;
+
+        for (var i = 0; i < parts.Count; i++)
+        {
+            parts[i].MakeGameobject(this);
+            parts[i].GameObject.GetComponent<Rigidbody>().AddForceAtPosition(forceDirection * ExplodeForce, transform.position);
+        }
+
+        Destroy(gameObject);
+    }
+    private void DestroyMesh(int cascades, float force, Vector3 forceDirection)
     {
         CutCascades = cascades;
         ExplodeForce = force;
@@ -63,41 +137,9 @@ public class MeshDestroy : MonoBehaviour
                 var bounds = parts[i].Bounds;
                 bounds.Expand(0.5f);
 
-                //Add place to cut
-
-                //in: vector3, make plane shoot out from it
-                //point1
-                //var plane = new Plane(UnityEngine.Random.onUnitSphere, new Vector3(UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
-                //                                                                   UnityEngine.Random.Range(bounds.min.y, bounds.max.y),
-                //                                                                   UnityEngine.Random.Range(bounds.min.z, bounds.max.z))); 
-
-                //var plane = new Plane((GameObject.Find("TESTT").GetComponent<Transform>().position-startPos).normalized, Vector3.Distance(startPos, Vector3.zero));
-                var temp = (startPos - transform.position).normalized;
-                temp.Scale(bounds.max);
-                var plane = new Plane(new Vector3(0, UnityEngine.Random.Range(0f,1f), UnityEngine.Random.Range(0f, 1f)), temp);
-                var ok = new GameObject("testing");
-                ok.transform.position = ((startPos) / transform.localScale.x) * bounds.max.x + transform.localScale;
-
-                Debug.Log(forceDirection);
-
-                //Debug.Log(startPos);
-                //var pos = transform.position;
-                //var min = pos - new Vector3(Mathf.Abs(bounds.min.x), Mathf.Abs(bounds.min.y), Mathf.Abs(bounds.min.z));
-                //var max = pos + bounds.max;
-                //var sizeVector = max - min;
-                //var test = new Vector3((startPos.x - min.x) / sizeVector.x,
-                //    (startPos.y - min.y) / sizeVector.y,
-                //    (startPos.z - min.z) / sizeVector.z);
-                //test.Scale(sizeVector);
-                //var answer = bounds.min + test;
-
-                //var plane = new Plane(new Vector3(0, 0, 1), answer);
-
-                Debug.Log(plane);
-                Debug.Log(new Vector3(UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
+                var plane = new Plane(UnityEngine.Random.onUnitSphere, new Vector3(UnityEngine.Random.Range(bounds.min.x, bounds.max.x),
                                                                                    UnityEngine.Random.Range(bounds.min.y, bounds.max.y),
                                                                                    UnityEngine.Random.Range(bounds.min.z, bounds.max.z)));
-                
 
 
                 subParts.Add(GenerateMesh(parts[i], plane, true));
@@ -115,7 +157,6 @@ public class MeshDestroy : MonoBehaviour
 
         Destroy(gameObject);
     }
-
     private PartMesh GenerateMesh(PartMesh original, Plane plane, bool left)
     {
         var partMesh = new PartMesh() { };
@@ -250,4 +291,24 @@ public class MeshDestroy : MonoBehaviour
                                 uv2);
         }
     }
+
+	private void OnCollisionEnter(Collision collision)
+	{
+        Rigidbody rb = gameObject.GetComponent<Rigidbody>();
+
+        if (rb.velocity.magnitude > 12 && started)
+		{
+            DestroyMesh(5, 10, rb.velocity*3f);
+            started = false;
+            ac.volume += 0.04f * CutCascades;
+            if(!ac.isPlaying) ac.Play();
+
+            for (int i = 0; i <  CutCascades; i++)
+            {
+                ball.StartRoutine();
+            }
+        }
+    }
+
+    
 }

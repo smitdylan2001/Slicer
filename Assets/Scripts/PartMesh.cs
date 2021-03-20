@@ -84,10 +84,13 @@ public class PartMesh
         collider.convex = true;
 
         var rigidbody = GameObject.AddComponent<Rigidbody>();
-        //var meshDestroy = GameObject.AddComponent<MeshDestroy>();
-        //meshDestroy.CutCascades = original.CutCascades;
-        //meshDestroy.ExplodeForce = original.ExplodeForce;
 
+        if(Vertices.Length > 0 && Vertices.Length < 35)
+		{
+            var meshDestroy = GameObject.AddComponent<MeshDestroy>();
+            meshDestroy.CutCascades = original.CutCascades;
+            meshDestroy.ExplodeForce = original.ExplodeForce;
+        }
     }
 
 }
